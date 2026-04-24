@@ -2,19 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { 
-  PlusIcon, 
-  TrashIcon, 
-  CheckCircleIcon, 
-  PencilIcon,
-  SparklesIcon,
-  StarIcon,
-  ArrowPathIcon
+  PlusIcon, TrashIcon, CheckCircleIcon, PencilIcon,
+  SparklesIcon, StarIcon, ArrowPathIcon,
+  ChartBarIcon, FunnelIcon, RocketLaunchIcon
 } from '@heroicons/react/24/outline';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://todolist-backend-4q3m.onrender.com/api';
-
-// Your Razorpay Test Keys
-const RAZORPAY_KEY_ID = 'rzp_test_SfeLWvcdE4fPbT';
 
 export default function TodoApp({ user, setUser }) {
   const [todos, setTodos] = useState([]);
@@ -22,27 +15,46 @@ export default function TodoApp({ user, setUser }) {
   const [priority, setPriority] = useState('medium');
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
-  const [isPremium, setIsPremium] = useState(user?.isPremium || false);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
-  const [upgrading, setUpgrading] = useState(false);
   const navigate = useNavigate();
 
   const token = localStorage.getItem('token');
 
+  // Verify token and fetch todos
   useEffect(() => {
+    if (!token) {
+      navigate('/');
+      return;
+    }
     fetchTodos();
   }, []);
 
   const fetchTodos = async () => {
     try {
       const response = await fetch(`${API_URL}/todos`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
-      if (!response.ok) throw new Error('Failed to fetch');
+      
+      if (response.status === 401) {
+        // Token expired or invalid
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        toast.error('Session expired. Please login again.');
+        navigate('/');
+        return;
+      }
+      
+      if (!response.ok) throw new Error('Failed to fetch todos');
+      
       const data = await response.json();
       setTodos(data);
     } catch (error) {
+      console.error('Fetch error:', error);
       toast.error('Error loading todos');
     } finally {
       setLoading(false);
@@ -64,6 +76,7 @@ export default function TodoApp({ user, setUser }) {
       });
       
       if (!response.ok) throw new Error('Failed to add');
+      
       const todo = await response.json();
       setTodos([todo, ...todos]);
       setNewTodo('');
@@ -85,10 +98,10 @@ export default function TodoApp({ user, setUser }) {
       });
       
       if (!response.ok) throw new Error('Failed to update');
+      
       setTodos(todos.map(todo => 
         todo._id === id ? { ...todo, completed: !completed } : todo
       ));
-      toast.success('Task updated');
     } catch (error) {
       toast.error('Error updating task');
     }
@@ -102,6 +115,7 @@ export default function TodoApp({ user, setUser }) {
       });
       
       if (!response.ok) throw new Error('Failed to delete');
+      
       setTodos(todos.filter(todo => todo._id !== id));
       toast.success('Task deleted');
     } catch (error) {
@@ -126,6 +140,7 @@ export default function TodoApp({ user, setUser }) {
       });
       
       if (!response.ok) throw new Error('Failed to update');
+      
       setTodos(todos.map(todo => 
         todo._id === id ? { ...todo, title: editText } : todo
       ));
@@ -141,90 +156,14 @@ export default function TodoApp({ user, setUser }) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
-    navigate('/login');
+    navigate('/');
     toast.success('Logged out successfully');
   };
 
-  const handleUpgrade = async () => {
-    setUpgrading(true);
-    try {
-      // Create order on your backend
-      const response = await fetch(`${API_URL}/premium/create-order`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to create order');
-      }
-      
-      const { order } = await response.json();
-      
-      // Configure Razorpay checkout
-      const options = {
-        key: RAZORPAY_KEY_ID,
-        amount: order.amount,
-        currency: order.currency,
-        name: 'Task Clarity Premium',
-        description: 'Unlock unlimited tasks & priority support',
-        order_id: order.id,
-        handler: async (response) => {
-          try {
-            // Verify payment on your backend
-            const verifyResponse = await fetch(`${API_URL}/premium/verify`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature
-              })
-            });
-            
-            if (verifyResponse.ok) {
-              const data = await verifyResponse.json();
-              setIsPremium(true);
-              // Update user data in localStorage
-              const updatedUser = { ...user, isPremium: true };
-              localStorage.setItem('user', JSON.stringify(updatedUser));
-              setUser(updatedUser);
-              toast.success('Welcome to Premium! 🎉 You now have unlimited access.');
-            } else {
-              throw new Error('Payment verification failed');
-            }
-          } catch (error) {
-            toast.error('Payment verification failed. Please contact support.');
-          }
-        },
-        prefill: {
-          name: user.name,
-          email: user.email,
-        },
-        theme: {
-          color: '#3B82F6'
-        },
-        modal: {
-          ondismiss: () => {
-            toast.error('Payment cancelled');
-            setUpgrading(false);
-          }
-        }
-      };
-      
-      const razorpay = new window.Razorpay(options);
-      razorpay.open();
-    } catch (error) {
-      console.error('Upgrade error:', error);
-      toast.error('Payment failed. Please try again.');
-    } finally {
-      setUpgrading(false);
-    }
+  const stats = {
+    total: todos.length,
+    completed: todos.filter(t => t.completed).length,
+    active: todos.filter(t => !t.completed).length
   };
 
   const filteredTodos = todos.filter(todo => {
@@ -242,41 +181,56 @@ export default function TodoApp({ user, setUser }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="max-w-4xl mx-auto p-4 py-8">
+        {/* Stats Cards */}
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <ChartBarIcon className="w-5 h-5 text-blue-600" />
+              </div>
+              <h3 className="font-semibold text-gray-800">Prioritize work</h3>
+            </div>
+            <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+            <p className="text-sm text-gray-500">Active tasks</p>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <FunnelIcon className="w-5 h-5 text-purple-600" />
+              </div>
+              <h3 className="font-semibold text-gray-800">Filter focus</h3>
+            </div>
+            <p className="text-2xl font-bold text-gray-900">{filter}</p>
+            <p className="text-sm text-gray-500">Current view</p>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <RocketLaunchIcon className="w-5 h-5 text-green-600" />
+              </div>
+              <h3 className="font-semibold text-gray-800">Finish with momentum</h3>
+            </div>
+            <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
+            <p className="text-sm text-gray-500">Completed tasks</p>
+          </div>
+        </div>
+      
+        {/* Todo App */}
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-white">Task Clarity</h1>
-              <p className="text-blue-100">Welcome back, {user.name}</p>
+              <h1 className="text-2xl font-bold text-white">Todo List</h1>
+              <p className="text-blue-100">Welcome back, {user?.name || user?.email}</p>
             </div>
-            <div className="flex gap-3">
-              {!isPremium && (
-                <button
-                  onClick={handleUpgrade}
-                  disabled={upgrading}
-                  className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {upgrading ? (
-                    <ArrowPathIcon className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <SparklesIcon className="w-5 h-5" />
-                  )}
-                  <span className="hidden sm:inline">{upgrading ? 'Processing...' : 'Upgrade'}</span>
-                </button>
-              )}
-              {isPremium && (
-                <div className="flex items-center gap-2 bg-yellow-500 text-white px-4 py-2 rounded-lg">
-                  <StarIcon className="w-5 h-5" />
-                  <span>Premium</span>
-                </div>
-              )}
-              <button
-                onClick={handleLogout}
-                className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-white transition"
-              >
-                Logout
-              </button>
-            </div>
+            <button
+              onClick={handleLogout}
+              className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-white transition"
+            >
+              Logout
+            </button>
           </div>
 
           {/* Add Todo Form */}
@@ -330,7 +284,9 @@ export default function TodoApp({ user, setUser }) {
             {loading ? (
               <div className="p-8 text-center text-gray-500">Loading tasks...</div>
             ) : filteredTodos.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No tasks found. Add one above!</div>
+              <div className="p-8 text-center text-gray-500">
+                No tasks found. Add one above!
+              </div>
             ) : (
               filteredTodos.map(todo => (
                 <div key={todo._id} className="p-4 hover:bg-gray-50 transition group">
@@ -402,16 +358,11 @@ export default function TodoApp({ user, setUser }) {
             )}
           </div>
 
-          {/* Stats */}
+          {/* Footer Stats */}
           <div className="p-4 bg-gray-50 text-sm text-gray-600 flex justify-between">
-            <span>{todos.filter(t => !t.completed).length} tasks remaining</span>
-            <span>{todos.filter(t => t.completed).length} completed</span>
-            {isPremium && (
-              <span className="text-yellow-600 flex items-center gap-1">
-                <StarIcon className="w-4 h-4" />
-                Premium Member
-              </span>
-            )}
+            <span>{stats.active} tasks remaining</span>
+            <span>{stats.completed} completed</span>
+            <span>{stats.total} total</span>
           </div>
         </div>
       </div>
