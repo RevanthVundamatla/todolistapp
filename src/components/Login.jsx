@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { GoogleIcon } from '../icons/GoogleIcon';
@@ -12,6 +12,21 @@ export default function Login({ setUser }) {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Check for Google auth callback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const userData = urlParams.get('user');
+    
+    if (token && userData) {
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', userData);
+      setUser(JSON.parse(userData));
+      toast.success('Google login successful!');
+      navigate('/app');
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,7 +48,7 @@ export default function Login({ setUser }) {
       localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
       toast.success(isLogin ? 'Welcome back!' : 'Account created successfully!');
-      navigate('/');
+      navigate('/app');
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -42,15 +57,16 @@ export default function Login({ setUser }) {
   };
 
   const handleGoogleLogin = () => {
+    // Redirect to backend Google OAuth
     window.location.href = `${API_URL}/auth/google`;
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">Task Clarity</h1>
-          <p className="text-gray-500 mt-2">Turn a noisy day into a calm plan</p>
+    <div className="max-w-md mx-auto px-4 pb-16">
+      <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="text-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Welcome back</h2>
+          <p className="text-gray-500 mt-1">Sign in to continue to Task Clarity</p>
         </div>
 
         <button
@@ -114,6 +130,10 @@ export default function Login({ setUser }) {
           >
             {isLogin ? 'Sign Up' : 'Sign In'}
           </button>
+        </p>
+        
+        <p className="text-center text-xs text-gray-400 mt-4">
+          Test Mode - Use email: test@example.com / password: test123
         </p>
       </div>
     </div>
